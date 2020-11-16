@@ -4,7 +4,7 @@
 from django.http import JsonResponse
 from django.utils import timezone
 from ..models import yonghu, lifashi, lifadian, fuwu, jiesuandingdan, pingjia, dingdan, jishiqitadizhi, faxing, tupian,\
-    yuyuedingdan, shoucang
+    yuyuedingdan, shoucang, dizhi
 from django.db.utils import IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -367,7 +367,8 @@ def lifashiDetail(request):
         datagetter = request.GET
     lianxifangshi = datagetter.get("lianxifangshi")
     the_lifashi = lifashi.objects.get(lianxidianhua=lianxifangshi)
-    the_detail = {"id":the_lifashi.id, "name": the_lifashi.xingming, "yonghuming": the_lifashi.yonghuming, "phone": the_lifashi.lianxidianhua}
+    the_detail = {"id":the_lifashi.id, "name": the_lifashi.xingming,
+                          "yonghuming": the_lifashi.yonghuming, "phone": the_lifashi.lianxidianhua}
     return JsonResponse(the_detail)
 
 # 用户提交预约订单——用户端
@@ -407,7 +408,6 @@ def yonghu_shoucang_delete(request, shoucangleixing):
         datagetter = request.GET
     shoucang_id = datagetter.get('shoucang_id')
     i_yonghu = yonghu.objects.get(id=datagetter.get('yonghu_id'))
-    print(shoucangleixing)
     try:
         for i_shoucang in shoucang.objects.filter(yonghu=i_yonghu):
             if int(i_shoucang.tupianleixing) == int(shoucangleixing) and i_shoucang.beishoucang_id == shoucang_id:
@@ -484,8 +484,8 @@ def getYonghuDingdan(request, zhuangtai_id):
                     dingdanList.append(dingdan_detail)
     return JsonResponse(dingdanList, safe=False)
 
-#理发师获取理发店——理发师端
-def getLifadian(request):
+#理发师获取自己的理发店——理发师端
+def getLifadian(request, zhuangtaiid):
     if request.method == "POST":
         datagetter = request.POST
     else:
@@ -493,16 +493,13 @@ def getLifadian(request):
     i_lifashi = lifashi.objects.get(id=datagetter.get("lifashi_id"))
     i_lifahi_id = i_lifashi.id
     lifadianList = []
-    for i_lifadian in jishiqitadizhi.objects.filter(lifashi_id=i_lifahi_id):
-        try:
-            the_lifadian = lifadian.objects.get(id=i_lifadian.id)
+    for i_dizhi in jishiqitadizhi.objects.filter(lifashi_id=i_lifahi_id):
+        if int(i_dizhi.zhuangtai) == zhuangtaiid :
+            the_lifadian = lifadian.objects.get(id=i_dizhi.lifadian_id)
             the_detail = {"dianzhuming": the_lifadian.dianzhuming, "phone":the_lifadian.dianzhulianxi,
-                          "name":the_lifadian.dianming, 'dizhi':the_lifadian.dizhi,
-                          "time":i_lifadian.shenqingshijian,"zhuangtai":i_lifadian.zhuangtai}
+                              "name":the_lifadian.dianming, "time":i_dizhi.shenqingshijian,"zhuangtai":i_dizhi.zhuangtai}
             lifadianList.append(the_detail)
-            return JsonResponse(lifadianList)
-        except:
-            return JsonResponse({"status":"0", "msg": "您还没有申请的理发店"})
+    return JsonResponse(lifadianList, safe=False)
 
 
 def yuyue_shijian(request):
@@ -527,9 +524,19 @@ def yuyue_shijian(request):
     data =  list(set(list(after))  & set(before) )
     return JsonResponse({"status":"1","msg":data})
 
-
+# 理发师申请其他地址
 def jishidizhi_add(response):
     lifashi_id = response.POST.get("lifashi_id")
     lifadian_id = response.POST.get("lifadian_id")
     jishiqitadizhi.objects.create(lifashi_id=lifashi_id,lifadian_id=lifadian_id,shenqingshijian=timezone.now(),zhuangtai='0')
     return JsonResponse({"status":1,"msg":"申请成功"})
+
+# 理发师撤销其他地址
+def jishidizhi_delete(response):
+    lifashi_id = response.POST.get("lifashi_id")
+    lifadian_id = response.POST.get('lifadian_id')
+    for i_dizhi in jishiqitadizhi.objects.filter(lifashi_id= lifashi_id):
+        if i_dizhi.lifadian_id == lifadian_id:
+            i_dizhi.delete()
+            break
+    return JsonResponse({"status":1, "msg": "删除成功"})
